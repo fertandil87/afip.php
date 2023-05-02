@@ -1,19 +1,16 @@
 <?php
 /**
  * Software Development Kit for AFIP web services
- * 
- * This release of Afip SDK is intended to facilitate 
- * the integration to other different web services that 
- * Electronic Billing   
+ *
+ * This release of Afip SDK is intended to facilitate
+ * the integration to other different web services that
+ * Electronic Billing
  *
  * @link http://www.afip.gob.ar/ws/ AFIP Web Services documentation
  *
  * @author 	Afip SDK afipsdk@gmail.com
  * @package Afip
  **/
-
-include_once __DIR__.'/libs/mixpanel/Mixpanel.php';
-include_once __DIR__.'/libs/Requests/Requests.php';
 
 Requests::register_autoloader();
 
@@ -103,33 +100,19 @@ class Afip {
 		'RegisterScopeThirteen'
 	);
 
-	var $mixpanel;
-	var $AdminClient;
-
 	function __construct($options)
 	{
 		ini_set("soap.wsdl_cache_enabled", "0");
-
-		// Create the Mixpanel class instance
-		$this->mixpanel = Mixpanel::getInstance("e87ee11c8cc288e5c5dc213c4d957c7e");
-
-		$this->mixpanel->register('afip_sdk_library', 'php');
-
-		if (isset($_SERVER['REMOTE_ADDR'])) {
-			$this->mixpanel->register('ip', $_SERVER['REMOTE_ADDR']);
-		}
 
 		if (!isset($options['CUIT'])) {
 			throw new Exception("CUIT field is required in options array");
 		} else {
 			$this->CUIT = $options['CUIT'];
-			$this->mixpanel->register('distinct_id', $options['CUIT']);
 		}
 
 		if (!isset($options['production'])) {
 			$options['production'] = FALSE;
 		}
-		$this->mixpanel->register('production', $options['production']);
 
 		if (!isset($options['passphrase'])) {
 			$options['passphrase'] = 'xxxxx';
@@ -173,16 +156,13 @@ class Afip {
 			$this->WSAA_URL = 'https://wsaahomo.afip.gov.ar/ws/services/LoginCms';
 		}
 
-		if (!file_exists($this->CERT)) 
+		if (!file_exists($this->CERT))
 			throw new Exception("Failed to open ".$this->CERT."\n", 1);
-		if (!file_exists($this->PRIVATEKEY)) 
+		if (!file_exists($this->PRIVATEKEY))
 			throw new Exception("Failed to open ".$this->PRIVATEKEY."\n", 2);
-		if (!file_exists($this->WSAA_WSDL)) 
+		if (!file_exists($this->WSAA_WSDL))
 			throw new Exception("Failed to open ".$this->WSAA_WSDL."\n", 3);
-		
-		try {
-			$this->mixpanel->track("initialized", $options);
-		} catch (Exception $e) {}
+
 	}
 
 	/**
@@ -194,7 +174,7 @@ class Afip {
 	 *
 	 * @throws Exception if an error occurs
 	 *
-	 * @return TokenAuthorization Token Authorization for AFIP Web Service 
+	 * @return TokenAuthorization Token Authorization for AFIP Web Service
 	**/
 	public function GetServiceTA($service, $continue = TRUE)
 	{
@@ -204,13 +184,13 @@ class Afip {
 			$actual_time 		= new DateTime(date('c',date('U')+600));
 			$expiration_time 	= new DateTime($TA->header->expirationTime);
 
-			if ($actual_time < $expiration_time) 
+			if ($actual_time < $expiration_time)
 				return new TokenAuthorization($TA->credentials->token, $TA->credentials->sign);
 			else if ($continue === FALSE)
 				throw new Exception("Error Getting TA", 5);
 		}
 
-		if ($this->CreateServiceTA($service)) 
+		if ($this->CreateServiceTA($service))
 			return $this->GetServiceTA($service, FALSE);
 	}
 
@@ -267,14 +247,14 @@ class Afip {
 			'trace'          => 1,
 			'exceptions'     => $this->options['exceptions'],
 			'stream_context' => stream_context_create(['ssl'=> ['ciphers'=> 'AES256-SHA','verify_peer'=> false,'verify_peer_name'=> false]])
-		)); 
+		));
 		$results=$client->loginCms(array('in0'=>$CMS));
-		if (is_soap_fault($results)) 
+		if (is_soap_fault($results))
 			throw new Exception("SOAP Fault: ".$results->faultcode."\n".$results->faultstring."\n", 4);
 
 		$TA = $results->loginCmsReturn;
 
-		if (file_put_contents($this->TA_FOLDER.'TA-'.$this->options['CUIT'].'-'.$service.($this->options['production'] === TRUE ? '-production' : '').'.xml', $TA)) 
+		if (file_put_contents($this->TA_FOLDER.'TA-'.$this->options['CUIT'].'-'.$service.($this->options['production'] === TRUE ? '-production' : '').'.xml', $TA))
 			return TRUE;
 		else
 			throw new Exception('Error writing "TA-'.$this->options['CUIT'].'-'.$service.'.xml"', 5);
@@ -282,15 +262,15 @@ class Afip {
 
 	/**
 	 * Create generic Web Service
-	 * 
+	 *
 	 * @since 0.6
-	 * 
+	 *
 	 * @param string $service Web Service name
 	 * @param array $options Web Service options
 	 *
 	 * @throws Exception if an error occurs
 	 *
-	 * @return AfipWebService Token Authorization for AFIP Web Service 
+	 * @return AfipWebService Token Authorization for AFIP Web Service
 	 **/
 	public function WebService($service, $options)
 	{
@@ -300,71 +280,6 @@ class Afip {
 		return new AfipWebService($this, $options);
 	}
 
-	/**
-	 * Track SDK usage
-	 * 
-	 * @param string 	$web_service 	ID of the web service used
-	 * @param string 	$operation 		SOAP operation called 
-	 * @param array 	$params 		Parameters for the ws
-	 **/
-	public function TrackUsage($web_service, $operation, $params = array())
-	{
-		$options = array();
-
-		if ($web_service === 'wsfe' && $operation === 'FECAESolicitar') {
-			if (isset($params['FeCAEReq']) && isset($params['FeCAEReq']['FeCabReq']) && isset($params['FeCAEReq']['FeCabReq']['CbteTipo'])) {
-				$options['CbteTipo'] = $params['FeCAEReq']['FeCabReq']['CbteTipo'];
-			}
-
-
-
-			if (isset($params['FeCAEReq']) && isset($params['FeCAEReq']['FeDetReq']) && isset($params['FeCAEReq']['FeDetReq']['FECAEDetRequest']) && isset($params['FeCAEReq']['FeDetReq']['FECAEDetRequest']['ImpTotal'])) {
-				$options['ImpTotal'] = $params['FeCAEReq']['FeDetReq']['FECAEDetRequest']['ImpTotal'];
-			}
-		}
-
-		try {
-			$this->mixpanel->track($web_service.'.'.$operation, $options);
-		} catch (Exception $e) {}
-
-		if (!isset($this->AdminClient) && $this->options['production'] === TRUE) {
-			$this->AdminClient = TRUE;
-
-			$headers = array(
-				'sdk-version-number' => '0.7.8',
-				'sdk-library' => 'php'
-			);
-
-			if (isset($this->options['access_token'])) {
-				$headers['Authorization'] = 'Bearer '.$this->options['access_token'];
-			}
-
-			$data = array(
-				"name" => "initialized",
-				"properties" => array(
-					"environment" => $this->options['production'] === TRUE ? "prod" : "dev",
-					"tax_id" => ''.$this->options['CUIT'],
-					"afip_sdk_library" => "php"
-				)
-			);
-
-			$request = Requests::post('https://app.afipsdk.com/api/v1/sdk-events', $headers, $data);
-
-			if (!$request->success) {
-				$error_message = $request->body;
-
-				try {
-					$json_res = json_decode($request->body);
-
-					if (isset($json_res->message)) {
-						$error_message = $json_res->message;
-					}
-				} catch (Exception $e) {}
-
-				throw new Exception($error_message);
-			}
-		}
-	}
 
 	public function __get($property)
 	{
@@ -373,7 +288,7 @@ class Afip {
 				return $this->{$property};
 			} else {
 				$file = __DIR__.'/Class/'.$property.'.php';
-				if (!file_exists($file)) 
+				if (!file_exists($file))
 					throw new Exception("Failed to open ".$file."\n", 1);
 
 				include_once $file;
@@ -417,7 +332,7 @@ class TokenAuthorization {
 }
 
 /**
- * Base class for AFIP web services 
+ * Base class for AFIP web services
  *
  * @since 0.6
  *
@@ -439,7 +354,7 @@ class AfipWebService
 	 * @var string
 	 **/
 	var $WSDL;
-	
+
 	/**
 	 * The url to web service
 	 *
@@ -448,7 +363,7 @@ class AfipWebService
 	var $URL;
 
 	/**
-	 * File name for the Web Services Description 
+	 * File name for the Web Services Description
 	 * Language in test mode
 	 *
 	 * @var string
@@ -461,14 +376,14 @@ class AfipWebService
 	 * @var string
 	 **/
 	var $URL_TEST;
-	
+
 	/**
 	 * The Afip parent Class
 	 *
 	 * @var Afip
 	 **/
 	var $afip;
-	
+
 	/**
 	 * Class options
 	 *
@@ -477,7 +392,7 @@ class AfipWebService
 	var $options;
 
 	var $soap_client;
-	
+
 	function __construct($afip, $options = array())
 	{
 		$this->afip = $afip;
@@ -527,18 +442,18 @@ class AfipWebService
 			}
 		}
 
-		if (!file_exists($this->WSDL)) 
+		if (!file_exists($this->WSDL))
 			throw new Exception("Failed to open ".$this->WSDL."\n", 3);
 	}
 
 	/**
 	 * Get Web Service Token Authorization from WSAA
-	 * 
+	 *
 	 * @since 0.6
 	 *
 	 * @throws Exception if an error occurs
 	 *
-	 * @return TokenAuthorization Token Authorization for AFIP Web Service 
+	 * @return TokenAuthorization Token Authorization for AFIP Web Service
 	 **/
 	public function GetTokenAuthorization()
 	{
@@ -547,13 +462,13 @@ class AfipWebService
 
 	/**
 	 * Sends request to AFIP servers
-	 * 
+	 *
 	 * @since 0.6
 	 *
-	 * @param string 	$operation 	SOAP operation to do 
+	 * @param string 	$operation 	SOAP operation to do
 	 * @param array 	$params 	Parameters to send
 	 *
-	 * @return mixed Operation results 
+	 * @return mixed Operation results
 	 **/
 	public function ExecuteRequest($operation, $params = array())
 	{
@@ -569,8 +484,6 @@ class AfipWebService
 
 		$results = $this->soap_client->{$operation}($params);
 
-		$this->afip->TrackUsage($this->options['service'], $operation, $params);
-		
 		$this->_CheckErrors($operation, $results);
 
 		return $results;
@@ -578,19 +491,19 @@ class AfipWebService
 
 	/**
 	 * Check if occurs an error on Web Service request
-	 * 
+	 *
 	 * @since 0.6
 	 *
-	 * @param string 	$operation 	SOAP operation to check 
+	 * @param string 	$operation 	SOAP operation to check
 	 * @param mixed 	$results 	AFIP response
 	 *
-	 * @throws Exception if exists an error in response 
-	 * 
-	 * @return void 
+	 * @throws Exception if exists an error in response
+	 *
+	 * @return void
 	 **/
 	private function _CheckErrors($operation, $results)
 	{
-		if (is_soap_fault($results)) 
+		if (is_soap_fault($results))
 			throw new Exception("SOAP Fault: ".$results->faultcode."\n".$results->faultstring."\n", 4);
 	}
 }
