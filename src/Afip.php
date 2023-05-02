@@ -12,7 +12,6 @@
  * @package Afip
  **/
 
-Requests::register_autoloader();
 
 // function include_all_php($folder){
 //     foreach (glob("{$folder}/*.php") as $filename)
